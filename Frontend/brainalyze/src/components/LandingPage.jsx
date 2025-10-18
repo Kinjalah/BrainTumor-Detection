@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Brain, Shield, Zap, Users, ChevronRight, Activity, Microscope, FileText, Award, Clock, CheckCircle } from 'lucide-react';
 
 export default function LandingPage() {
@@ -41,9 +42,11 @@ export default function LandingPage() {
               <a href="#features" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">Features</a>
               <a href="#how-it-works" className="text-gray-700 hover:text-purple-600 transition-colors font-medium">How It Works</a>
               <a href="#about" className="text-gray-700 hover:text-pink-600 transition-colors font-medium">About</a>
-              <button className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 font-semibold transform hover:scale-105">
-                Login
-              </button>
+              <Link to="/login">
+  <button className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 font-semibold transform hover:scale-105">
+    Login
+  </button>
+</Link>
             </div>
           </div>
         </div>
@@ -69,10 +72,12 @@ export default function LandingPage() {
                 Revolutionizing neurological diagnostics with cutting-edge deep learning. Fast, accurate, and reliable MRI analysis that empowers healthcare professionals to make confident decisions.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <button className="group px-8 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-2xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 font-bold text-lg flex items-center justify-center transform hover:scale-105">
-                  Get Started Free
-                  <ChevronRight className="ml-2 group-hover:translate-x-2 transition-transform" />
-                </button>
+                <Link to="/signup">
+  <button className="group px-8 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-2xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 font-bold text-lg flex items-center justify-center transform hover:scale-105">
+    Get Started Free
+    <ChevronRight className="ml-2 group-hover:translate-x-2 transition-transform" />
+  </button>
+</Link>
                 <button className="px-8 py-4 bg-white border-2 border-purple-300 text-purple-700 rounded-2xl hover:bg-purple-50 transition-all duration-300 font-bold text-lg shadow-md hover:shadow-xl">
                   Watch Demo 🎥
                 </button>
@@ -281,9 +286,11 @@ export default function LandingPage() {
               Transform your diagnostic workflow with AI-powered precision. Start detecting brain tumors faster and more accurately today.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-10 py-5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-2xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 font-bold text-lg transform hover:scale-110">
-                Start Free Trial 🚀
-              </button>
+              <Link to="/signup">
+  <button className="px-10 py-5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-2xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 font-bold text-lg transform hover:scale-110">
+    Start Free Trial 🚀
+  </button>
+</Link>
               <button className="px-10 py-5 bg-white border-2 border-purple-300 text-purple-700 rounded-2xl hover:bg-purple-50 transition-all duration-300 font-bold text-lg shadow-md hover:shadow-xl">
                 Schedule Demo
               </button>
