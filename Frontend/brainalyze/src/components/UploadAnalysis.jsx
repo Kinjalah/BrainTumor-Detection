@@ -1,0 +1,440 @@
+import React, { useState } from 'react';
+import { Brain, Upload, User, Calendar, Ruler, Weight, Droplet, MapPin, Phone, Mail, LogOut, Menu, X, FileText, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+
+export default function UploadAnalysis() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  // Sample patient data (this would come from your backend after login)
+  const patientData = {
+    name: 'John Anderson',
+    patientId: 'PAT-2024-001',
+    email: 'john.anderson@email.com',
+    phone: '+1 (555) 123-4567',
+    dateOfBirth: '1985-03-15',
+    age: 39,
+    gender: 'Male',
+    height: 175,
+    weight: 78,
+    bloodGroup: 'A+',
+    address: '123 Medical Center Dr, New York, NY 10001'
+  };
+
+  // Sample analysis results (this would come from your ML backend)
+  const analysisResults = {
+    tumorDetected: true,
+    confidence: 94.5,
+    tumorType: 'Glioblastoma',
+    tumorSize: '3.2 cm',
+    tumorLocation: 'Right Frontal Lobe',
+    severity: 'High',
+    description: 'A high-grade malignant tumor detected in the right frontal lobe. The tumor shows irregular borders and heterogeneous enhancement pattern. Immediate medical consultation is strongly recommended.',
+    recommendations: [
+      'Immediate consultation with neurosurgeon',
+      'Additional MRI with contrast recommended',
+      'Biopsy suggested for confirmation',
+      'Consider molecular profiling'
+    ]
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileUpload(e.target.files[0]);
+    }
+  };
+
+  const handleFileUpload = (file) => {
+    setUploadedFile(file);
+    // Simulate analysis
+    setIsAnalyzing(true);
+    setTimeout(() => {
+      setIsAnalyzing(false);
+      setAnalysisComplete(true);
+    }, 3000);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      {/* Header */}
+      <header className="bg-white bg-opacity-90 backdrop-blur-xl border-b-2 border-purple-200 sticky top-0 z-40 shadow-md">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 hover:bg-purple-100 rounded-lg transition-colors lg:hidden"
+              >
+                {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+              <div className="flex items-center space-x-3">
+                <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-2 rounded-xl">
+                  <Brain className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                    Brainalyze
+                  </h1>
+                  <p className="text-xs text-gray-500">MRI Analysis Portal</p>
+                </div>
+              </div>
+            </div>
+            <button className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors font-semibold">
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex">
+        {/* Sidebar - Patient Details */}
+        <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] w-80 bg-white bg-opacity-90 backdrop-blur-xl border-r-2 border-purple-200 transition-transform duration-300 z-30 overflow-y-auto`}>
+          <div className="p-6 space-y-6">
+            {/* Patient Header */}
+            <div className="text-center pb-6 border-b-2 border-purple-200">
+              <div className="w-24 h-24 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
+                <User className="w-12 h-12 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800">{patientData.name}</h2>
+              <p className="text-sm text-gray-500">{patientData.patientId}</p>
+              <span className="inline-block mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
+                Active Patient
+              </span>
+            </div>
+
+            {/* Patient Details */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-gray-800 flex items-center space-x-2">
+                <FileText className="w-5 h-5 text-purple-600" />
+                <span>Patient Information</span>
+              </h3>
+
+              <div className="space-y-3">
+                <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-xl">
+                  <Mail className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold">Email</p>
+                    <p className="text-sm text-gray-800">{patientData.email}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3 p-3 bg-purple-50 rounded-xl">
+                  <Phone className="w-5 h-5 text-purple-600 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold">Phone</p>
+                    <p className="text-sm text-gray-800">{patientData.phone}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-pink-50 rounded-xl">
+                    <Calendar className="w-5 h-5 text-pink-600 mb-1" />
+                    <p className="text-xs text-gray-500 font-semibold">Age</p>
+                    <p className="text-sm font-bold text-gray-800">{patientData.age} years</p>
+                  </div>
+
+                  <div className="p-3 bg-blue-50 rounded-xl">
+                    <User className="w-5 h-5 text-blue-600 mb-1" />
+                    <p className="text-xs text-gray-500 font-semibold">Gender</p>
+                    <p className="text-sm font-bold text-gray-800">{patientData.gender}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-purple-50 rounded-xl">
+                    <Ruler className="w-5 h-5 text-purple-600 mb-1" />
+                    <p className="text-xs text-gray-500 font-semibold">Height</p>
+                    <p className="text-sm font-bold text-gray-800">{patientData.height} cm</p>
+                  </div>
+
+                  <div className="p-3 bg-pink-50 rounded-xl">
+                    <Weight className="w-5 h-5 text-pink-600 mb-1" />
+                    <p className="text-xs text-gray-500 font-semibold">Weight</p>
+                    <p className="text-sm font-bold text-gray-800">{patientData.weight} kg</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3 p-3 bg-red-50 rounded-xl">
+                  <Droplet className="w-5 h-5 text-red-600 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold">Blood Group</p>
+                    <p className="text-sm font-bold text-gray-800">{patientData.bloodGroup}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-xl">
+                  <MapPin className="w-5 h-5 text-gray-600 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold">Address</p>
+                    <p className="text-sm text-gray-800">{patientData.address}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 p-6 lg:p-8 space-y-6">
+          {/* Upload Section */}
+          <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 p-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
+                <Upload className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Upload MRI Scan</h2>
+                <p className="text-sm text-gray-500">Upload .nii, .nii.gz, DICOM, or standard image formats</p>
+              </div>
+            </div>
+
+            {/* Upload Area */}
+            <div
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              className={`relative border-4 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${
+                dragActive
+                  ? 'border-purple-500 bg-purple-50'
+                  : 'border-gray-300 bg-gray-50 hover:border-purple-400 hover:bg-purple-50'
+              }`}
+            >
+              <input
+                type="file"
+                id="file-upload"
+                className="hidden"
+                onChange={handleFileChange}
+                accept=".nii,.nii.gz,.dcm,.jpg,.jpeg,.png"
+              />
+              
+              {!uploadedFile ? (
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-full flex items-center justify-center animate-pulse">
+                      <Upload className="w-10 h-10 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-gray-800 mb-2">
+                        Drop your MRI scan here or click to browse
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Supports: .nii, .nii.gz, DICOM, JPG, PNG (Max 100MB)
+                      </p>
+                    </div>
+                    <button className="px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105">
+                      Select File
+                    </button>
+                  </div>
+                </label>
+              ) : (
+                <div className="space-y-4">
+                  <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
+                  <div>
+                    <p className="text-xl font-bold text-gray-800">{uploadedFile.name}</p>
+                    <p className="text-sm text-gray-500">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  {isAnalyzing && (
+                    <div className="flex items-center justify-center space-x-3">
+                      <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                      <span className="text-purple-600 font-semibold">Analyzing MRI scan...</span>
+                    </div>
+                  )}
+                  {!isAnalyzing && !analysisComplete && (
+                    <button
+                      onClick={() => {
+                        setIsAnalyzing(true);
+                        setTimeout(() => {
+                          setIsAnalyzing(false);
+                          setAnalysisComplete(true);
+                        }, 3000);
+                      }}
+                      className="px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105"
+                    >
+                      Start Analysis
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setUploadedFile(null);
+                      setAnalysisComplete(false);
+                      setIsAnalyzing(false);
+                    }}
+                    className="ml-4 px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Upload Different File
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Analysis Results Section */}
+          {analysisComplete && (
+            <div className="space-y-6 animate-fade-in">
+              {/* Results Summary */}
+              <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 p-8">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl">
+                    <Activity className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Analysis Results</h2>
+                    <p className="text-sm text-gray-500">AI-powered tumor detection complete</p>
+                  </div>
+                </div>
+
+                {/* Alert Banner */}
+                <div className={`p-4 rounded-xl mb-6 flex items-start space-x-3 ${
+                  analysisResults.tumorDetected 
+                    ? 'bg-red-50 border-2 border-red-300' 
+                    : 'bg-green-50 border-2 border-green-300'
+                }`}>
+                  <AlertCircle className={`w-6 h-6 mt-0.5 ${
+                    analysisResults.tumorDetected ? 'text-red-600' : 'text-green-600'
+                  }`} />
+                  <div>
+                    <p className={`font-bold ${
+                      analysisResults.tumorDetected ? 'text-red-800' : 'text-green-800'
+                    }`}>
+                      {analysisResults.tumorDetected ? 'Tumor Detected' : 'No Tumor Detected'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Confidence: {analysisResults.confidence}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* Key Findings Grid */}
+                <div className="grid md:grid-cols-3 gap-4 mb-6">
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border-2 border-blue-300">
+                    <p className="text-xs text-gray-600 font-semibold mb-1">Tumor Type</p>
+                    <p className="text-lg font-bold text-gray-800">{analysisResults.tumorType}</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border-2 border-purple-300">
+                    <p className="text-xs text-gray-600 font-semibold mb-1">Size</p>
+                    <p className="text-lg font-bold text-gray-800">{analysisResults.tumorSize}</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl border-2 border-pink-300">
+                    <p className="text-xs text-gray-600 font-semibold mb-1">Location</p>
+                    <p className="text-lg font-bold text-gray-800">{analysisResults.tumorLocation}</p>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="p-6 bg-gray-50 rounded-xl border-2 border-gray-200 mb-6">
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-purple-600" />
+                    Detailed Description
+                  </h3>
+                  <p className="text-gray-700 leading-relaxed">{analysisResults.description}</p>
+                </div>
+
+                {/* Recommendations */}
+                <div className="p-6 bg-blue-50 rounded-xl border-2 border-blue-200">
+                  <h3 className="font-bold text-gray-800 mb-3">Recommendations</h3>
+                  <ul className="space-y-2">
+                    {analysisResults.recommendations.map((rec, index) => (
+                      <li key={index} className="flex items-start space-x-2">
+                        <CheckCircle2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <span className="text-gray-700">{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* 3D Visualization & Tumor Region */}
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* 3D View */}
+                <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 p-8">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <Brain className="w-6 h-6 mr-2 text-purple-600" />
+                    3D MRI Visualization
+                  </h3>
+                  <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl flex items-center justify-center relative overflow-hidden">
+                    {/* Placeholder for 3D visualization - integrate Three.js here */}
+                    <div className="text-center">
+                      <Brain className="w-32 h-32 text-purple-400 mx-auto mb-4 animate-pulse" />
+                      <p className="text-white text-sm">3D Brain Model</p>
+                      <p className="text-gray-400 text-xs mt-2">Interactive view will load here</p>
+                    </div>
+                    <div className="absolute bottom-4 right-4 space-x-2">
+                      <button className="px-3 py-1 bg-white bg-opacity-20 backdrop-blur-sm text-white rounded-lg text-xs hover:bg-opacity-30">
+                        Rotate
+                      </button>
+                      <button className="px-3 py-1 bg-white bg-opacity-20 backdrop-blur-sm text-white rounded-lg text-xs hover:bg-opacity-30">
+                        Zoom
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tumor Region */}
+                <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 p-8">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <MapPin className="w-6 h-6 mr-2 text-pink-600" />
+                    Tumor Region Mapping
+                  </h3>
+                  <div className="aspect-square bg-gradient-to-br from-pink-50 to-purple-50 rounded-2xl flex items-center justify-center relative border-2 border-pink-200">
+                    {/* Placeholder for tumor region visualization */}
+                    <div className="text-center">
+                      <div className="relative w-48 h-48 mx-auto mb-4">
+                        <div className="absolute inset-0 bg-blue-200 opacity-30 rounded-full"></div>
+                        <div className="absolute top-8 right-8 w-20 h-20 bg-red-500 opacity-70 rounded-full animate-pulse"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Brain className="w-32 h-32 text-purple-300" />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-center space-x-4 text-sm">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-4 h-4 bg-blue-300 rounded-full"></div>
+                          <span className="text-gray-600">Healthy Tissue</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                          <span className="text-gray-600">Tumor Region</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Download Report Button */}
+              <div className="text-center">
+                <button className="px-10 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-bold hover:shadow-2xl transition-all transform hover:scale-105 inline-flex items-center space-x-2">
+                  <FileText className="w-5 h-5" />
+                  <span>Download Complete Report (PDF)</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
