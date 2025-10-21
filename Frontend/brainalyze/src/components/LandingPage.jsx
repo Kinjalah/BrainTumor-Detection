@@ -78,9 +78,11 @@ export default function LandingPage() {
     <ChevronRight className="ml-2 group-hover:translate-x-2 transition-transform" />
   </button>
 </Link>
+<Link to="/report">
                 <button className="px-8 py-4 bg-white border-2 border-purple-300 text-purple-700 rounded-2xl hover:bg-purple-50 transition-all duration-300 font-bold text-lg shadow-md hover:shadow-xl">
                   Watch Demo 🎥
                 </button>
+                </Link>
               </div>
               <div className="grid grid-cols-3 gap-6 pt-6">
                 <div className="text-center p-4 bg-white bg-opacity-70 backdrop-blur-sm rounded-2xl shadow-lg transform hover:scale-105 transition-transform">

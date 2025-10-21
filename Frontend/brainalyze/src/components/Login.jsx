@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Brain, Mail, Lock, Eye, EyeOff, UserCircle, Stethoscope } from 'lucide-react';
 
 export default function Login() {
@@ -133,12 +134,14 @@ export default function Login() {
             </div>
 
             {/* Submit Button */}
+            <Link to="/upload">
             <button
               type="submit"
               className="w-full py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 transform hover:scale-105"
             >
               Sign In as {userType === 'patient' ? 'Patient' : 'Radiologist'}
             </button>
+            </Link>
           </form>
 
           {/* Sign Up Link */}
