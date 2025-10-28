@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Brain, Mail, Lock, Eye, EyeOff, UserCircle, Stethoscope, User, Phone, Calendar, Ruler, Weight, Users } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 export default function Signup() {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [userType, setUserType] = useState('patient'); // 'patient' or 'radiologist'
-  const [currentStep, setCurrentStep] = useState(1); // Multi-step form for patients
+  const [userType, setUserType] = useState('patient');
+  const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
 
-  // Patient Form Data
   const [patientData, setPatientData] = useState({
     fullName: '',
     email: '',
@@ -22,7 +25,6 @@ export default function Signup() {
     address: ''
   });
 
-  // Radiologist Form Data
   const [radiologistData, setRadiologistData] = useState({
     fullName: '',
     email: '',
@@ -49,22 +51,161 @@ export default function Signup() {
     });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const data = userType === 'patient' ? patientData : radiologistData;
-    
-    // Validate passwords match
-    if (data.password !== data.confirmPassword) {
-      alert('Passwords do not match!');
-      return;
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  const data = userType === 'patient' ? patientData : radiologistData;
+
+  if (data.password !== data.confirmPassword) {
+    alert('Passwords do not match!');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // Step 1: Create auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          full_name: data.fullName,
+          user_type: userType
+        }
+      }
+    });
+
+    if (authError) throw authError;
+    if (!authData.user) throw new Error('User creation failed - no user returned');
+
+    console.log('✅ Auth user created:', authData.user.id);
+
+    // Step 2: Sign in immediately to ensure session exists
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password
+    });
+
+    if (signInError) {
+      console.warn('⚠️ Auto sign-in failed:', signInError.message);
+    } else {
+      console.log('✅ User signed in');
     }
-    
-    console.log('Signup submitted:', { ...data, userType });
-    // Handle signup logic here - connect to your backend API
-  };
+
+    // ✅ Ensure we have an active authenticated session before making DB calls
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      throw new Error('No active session. Please check authentication flow.');
+    }
+
+    const userId = sessionData.session.user.id;
+    console.log('🪪 Active session user ID:', userId);
+
+    // Step 3: Wait briefly for the trigger to create the profile (if enabled)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Step 4: Check if the trigger created the profile
+    let { data: profileData, error: profileCheckError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    // Step 5: If trigger didn’t create the profile, create manually
+    if (!profileData) {
+      console.log('⚠️ Profile not created by trigger, creating manually...');
+
+      const { data: newProfile, error: createProfileError } = await supabase
+        .from('profiles')
+        .insert([{
+          id: userId,
+          email: data.email,
+          full_name: data.fullName,
+          user_type: userType
+        }])
+        .select()
+        .single();
+
+      if (createProfileError) {
+        console.error('Profile creation error:', createProfileError);
+        throw new Error('Failed to create profile. Please contact support.');
+      }
+
+      profileData = newProfile;
+      console.log('✅ Profile created manually:', profileData);
+    } else {
+      console.log('✅ Profile verified:', profileData);
+    }
+
+    // Step 6: Create user-specific data
+    if (userType === 'patient') {
+      const age = new Date().getFullYear() - new Date(patientData.dateOfBirth).getFullYear();
+
+      const { error: patientError } = await supabase
+        .from('patients')
+        .insert([{
+          user_id: userId,
+          date_of_birth: patientData.dateOfBirth,
+          age: age,
+          gender: patientData.gender,
+          height: parseInt(patientData.height),
+          weight: parseInt(patientData.weight),
+          blood_group: patientData.bloodGroup,
+          address: patientData.address,
+          phone: patientData.phone
+        }]);
+
+      if (patientError) {
+        console.error('Patient error:', patientError);
+        throw patientError;
+      }
+      console.log('✅ Patient data created');
+    } else {
+      const { error: radiologistError } = await supabase
+        .from('radiologists')
+        .insert([{
+          user_id: userId,
+          license_number: radiologistData.licenseNumber,
+          specialization: radiologistData.specialization,
+          hospital: radiologistData.hospital,
+          experience: parseInt(radiologistData.experience),
+          phone: radiologistData.phone
+        }]);
+
+      if (radiologistError) {
+        console.error('Radiologist error:', radiologistError);
+        throw radiologistError;
+      }
+      console.log('✅ Radiologist data created');
+    }
+
+    alert('✅ Signup successful! Redirecting to dashboard...');
+
+    // Step 7: Navigate to correct dashboard
+    if (userType === 'patient') {
+      navigate('/upload');
+    } else {
+      navigate('/radiologist-dashboard');
+    }
+
+  } catch (error) {
+    console.error('❌ Signup error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      hint: error.hint,
+      details: error.details,
+      code: error.code
+    });
+
+    await supabase.auth.signOut();
+
+    alert(`Error: ${error.message}\n\nPlease try again or contact support.`);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const nextStep = () => {
-    // Validate current step before proceeding
     const { fullName, email, password, confirmPassword, phone } = patientData;
     if (!fullName || !email || !password || !confirmPassword || !phone) {
       alert('Please fill in all required fields');
@@ -262,7 +403,8 @@ export default function Signup() {
                     <button
                       type="button"
                       onClick={nextStep}
-                      className="w-full py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 transform hover:scale-105 mt-6"
+                      disabled={loading}
+                      className="w-full py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 transform hover:scale-105 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next Step →
                     </button>
@@ -384,15 +526,17 @@ export default function Signup() {
                       <button
                         type="button"
                         onClick={prevStep}
-                        className="flex-1 py-4 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-all duration-300"
+                        disabled={loading}
+                        className="flex-1 py-4 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         ← Back
                       </button>
                       <button
                         type="submit"
-                        className="flex-1 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 transform hover:scale-105"
+                        disabled={loading}
+                        className="flex-1 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Create Account
+                        {loading ? 'Creating Account...' : 'Create Account'}
                       </button>
                     </div>
                   </div>
@@ -558,9 +702,10 @@ export default function Signup() {
 
                 <button
                   type="submit"
-                  className="w-full py-4 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-pink-500 transition-all duration-300 transform hover:scale-105 mt-6"
+                  disabled={loading}
+                  className="w-full py-4 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-pink-500 transition-all duration-300 transform hover:scale-105 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create Radiologist Account
+                  {loading ? 'Creating Account...' : 'Create Radiologist Account'}
                 </button>
               </div>
             )}
