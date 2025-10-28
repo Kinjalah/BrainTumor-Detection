@@ -1,74 +1,101 @@
-import React, { useState } from 'react';
-import { Brain, Upload, User, Calendar, Ruler, Weight, Droplet, MapPin, Phone, Mail, LogOut, Menu, X, FileText, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import {
+  Brain, Upload, User, Calendar, Ruler, Weight, Droplet,
+  MapPin, Phone, Mail, LogOut, Menu, X, Loader2
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function UploadAnalysis() {
+  const navigate = useNavigate();
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [patientData, setPatientData] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-  // Sample patient data (this would come from your backend after login)
-  const patientData = {
-    name: 'John Anderson',
-    patientId: 'PAT-2024-001',
-    email: 'john.anderson@email.com',
-    phone: '+1 (555) 123-4567',
-    dateOfBirth: '1985-03-15',
-    age: 39,
-    gender: 'Male',
-    height: 175,
-    weight: 78,
-    bloodGroup: 'A+',
-    address: '123 Medical Center Dr, New York, NY 10001'
+  // ✅ Fetch logged-in user profile + patient info
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        navigate('/login');
+        return;
+      }
+
+      // Fetch profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+        return;
+      }
+
+      setProfile(profileData);
+
+      // If patient, fetch patient info too
+      if (profileData.user_type === 'patient') {
+        const { data: patientDetails, error: patientError } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (patientError) {
+          console.error('Error fetching patient data:', patientError);
+          return;
+        }
+
+        setPatientData(patientDetails);
+      }
+    };
+
+    fetchProfile();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
   };
-
-  // Sample analysis results (this would come from your ML backend)
-  const analysisResults = {
-    tumorDetected: true,
-    confidence: 94.5,
-    tumorType: 'Glioblastoma',
-    tumorSize: '3.2 cm',
-    tumorLocation: 'Right Frontal Lobe',
-    severity: 'High',
-    description: 'A high-grade malignant tumor detected in the right frontal lobe. The tumor shows irregular borders and heterogeneous enhancement pattern. Immediate medical consultation is strongly recommended.',
-    recommendations: [
-      'Immediate consultation with neurosurgeon',
-      'Additional MRI with contrast recommended',
-      'Biopsy suggested for confirmation',
-      'Consider molecular profiling'
-    ]
-  };
-
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+// Handles drag events (for visual feedback)
+const handleDrag = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.type === "dragenter" || e.type === "dragover") {
+    setDragActive(true);
+  } else if (e.type === "dragleave") {
     setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files[0]);
-    }
-  };
+  }
+};
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileUpload(e.target.files[0]);
-    }
-  };
+// Handles when a file is dropped into the drop zone
+const handleDrop = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDragActive(false);
+
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+    handleFileUpload(e.dataTransfer.files[0]);
+  }
+};
+
+// Handles when a file is selected manually via the input
+const handleFileChange = (e) => {
+  e.preventDefault();
+  if (e.target.files && e.target.files[0]) {
+    handleFileUpload(e.target.files[0]);
+  }
+};
 
   const handleFileUpload = (file) => {
     setUploadedFile(file);
-    // Simulate analysis
     setIsAnalyzing(true);
     setTimeout(() => {
       setIsAnalyzing(false);
@@ -76,128 +103,120 @@ export default function UploadAnalysis() {
     }, 3000);
   };
 
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+        <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
+        <span className="ml-3 text-purple-600 font-semibold">Loading profile...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
       {/* Header */}
       <header className="bg-white bg-opacity-90 backdrop-blur-xl border-b-2 border-purple-200 sticky top-0 z-40 shadow-md">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 hover:bg-purple-100 rounded-lg transition-colors lg:hidden"
-              >
-                {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
-              <div className="flex items-center space-x-3">
-                <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-2 rounded-xl">
-                  <Brain className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                    Brainalyze
-                  </h1>
-                  <p className="text-xs text-gray-500">MRI Analysis Portal</p>
-                </div>
-              </div>
-            </div>
-            <button className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors font-semibold">
-              <LogOut className="w-4 h-4" />
-              <span>Logout</span>
+        <div className="px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-purple-100 rounded-lg transition-colors lg:hidden"
+            >
+              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
+            <div className="flex items-center space-x-2">
+              <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-2 rounded-xl">
+                <Brain className="w-8 h-8 text-white" />
+              </div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Brainalyze
+              </h1>
+            </div>
           </div>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 font-semibold"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
+          </button>
         </div>
       </header>
 
       <div className="flex">
-        {/* Sidebar - Patient Details */}
-        <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] w-80 bg-white bg-opacity-90 backdrop-blur-xl border-r-2 border-purple-200 transition-transform duration-300 z-30 overflow-y-auto`}>
+        {/* Sidebar */}
+        <aside
+          className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] w-80 bg-white bg-opacity-90 backdrop-blur-xl border-r-2 border-purple-200 transition-transform duration-300 z-30 overflow-y-auto`}
+        >
           <div className="p-6 space-y-6">
-            {/* Patient Header */}
             <div className="text-center pb-6 border-b-2 border-purple-200">
               <div className="w-24 h-24 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
                 <User className="w-12 h-12 text-white" />
               </div>
-              <h2 className="text-xl font-bold text-gray-800">{patientData.name}</h2>
-              <p className="text-sm text-gray-500">{patientData.patientId}</p>
+              <h2 className="text-xl font-bold text-gray-800">{profile.full_name}</h2>
+              <p className="text-sm text-gray-500">{profile.email}</p>
               <span className="inline-block mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
-                Active Patient
+                {profile.user_type}
               </span>
             </div>
 
             {/* Patient Details */}
-            <div className="space-y-4">
-              <h3 className="font-bold text-gray-800 flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-purple-600" />
-                <span>Patient Information</span>
-              </h3>
-
+            {profile.user_type === 'patient' && patientData && (
               <div className="space-y-3">
-                <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-xl">
-                  <Mail className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-xl">
+                  <Calendar className="w-5 h-5 text-blue-600" />
                   <div>
-                    <p className="text-xs text-gray-500 font-semibold">Email</p>
-                    <p className="text-sm text-gray-800">{patientData.email}</p>
+                    <p className="text-xs text-gray-500 font-semibold">Date of Birth</p>
+                    <p className="text-sm text-gray-800">{patientData.date_of_birth}</p>
                   </div>
                 </div>
 
-                <div className="flex items-start space-x-3 p-3 bg-purple-50 rounded-xl">
-                  <Phone className="w-5 h-5 text-purple-600 mt-0.5" />
+                <div className="flex items-center space-x-3 p-3 bg-pink-50 rounded-xl">
+                  <Ruler className="w-5 h-5 text-pink-600" />
                   <div>
-                    <p className="text-xs text-gray-500 font-semibold">Phone</p>
-                    <p className="text-sm text-gray-800">{patientData.phone}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-pink-50 rounded-xl">
-                    <Calendar className="w-5 h-5 text-pink-600 mb-1" />
-                    <p className="text-xs text-gray-500 font-semibold">Age</p>
-                    <p className="text-sm font-bold text-gray-800">{patientData.age} years</p>
-                  </div>
-
-                  <div className="p-3 bg-blue-50 rounded-xl">
-                    <User className="w-5 h-5 text-blue-600 mb-1" />
-                    <p className="text-xs text-gray-500 font-semibold">Gender</p>
-                    <p className="text-sm font-bold text-gray-800">{patientData.gender}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-purple-50 rounded-xl">
-                    <Ruler className="w-5 h-5 text-purple-600 mb-1" />
                     <p className="text-xs text-gray-500 font-semibold">Height</p>
-                    <p className="text-sm font-bold text-gray-800">{patientData.height} cm</p>
-                  </div>
-
-                  <div className="p-3 bg-pink-50 rounded-xl">
-                    <Weight className="w-5 h-5 text-pink-600 mb-1" />
-                    <p className="text-xs text-gray-500 font-semibold">Weight</p>
-                    <p className="text-sm font-bold text-gray-800">{patientData.weight} kg</p>
+                    <p className="text-sm text-gray-800">{patientData.height} cm</p>
                   </div>
                 </div>
 
-                <div className="flex items-start space-x-3 p-3 bg-red-50 rounded-xl">
-                  <Droplet className="w-5 h-5 text-red-600 mt-0.5" />
+                <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-xl">
+                  <Weight className="w-5 h-5 text-green-600" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold">Weight</p>
+                    <p className="text-sm text-gray-800">{patientData.weight} kg</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-xl">
+                  <Droplet className="w-5 h-5 text-yellow-600" />
                   <div>
                     <p className="text-xs text-gray-500 font-semibold">Blood Group</p>
-                    <p className="text-sm font-bold text-gray-800">{patientData.bloodGroup}</p>
+                    <p className="text-sm text-gray-800">{patientData.blood_group}</p>
                   </div>
                 </div>
 
-                <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-xl">
-                  <MapPin className="w-5 h-5 text-gray-600 mt-0.5" />
+                <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-xl">
+                  <MapPin className="w-5 h-5 text-purple-600" />
                   <div>
                     <p className="text-xs text-gray-500 font-semibold">Address</p>
                     <p className="text-sm text-gray-800">{patientData.address}</p>
                   </div>
                 </div>
+
+                <div className="flex items-center space-x-3 p-3 bg-red-50 rounded-xl">
+                  <Phone className="w-5 h-5 text-red-600" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold">Phone</p>
+                    <p className="text-sm text-gray-800">{patientData.phone}</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </aside>
 
-        {/* Main Content */}
+        {/* Main Content — your upload area remains here */}
         <main className="flex-1 p-6 lg:p-8 space-y-6">
           {/* Upload Section */}
           <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 p-8">
