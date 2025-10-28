@@ -1,26 +1,77 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Brain, Mail, Lock, Eye, EyeOff, UserCircle, Stethoscope } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient'; // ✅ Make sure your Supabase client is imported
 
 export default function Login() {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [userType, setUserType] = useState('patient'); // 'patient' or 'radiologist'
+  const [userType, setUserType] = useState('patient');
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Login submitted:', { ...formData, userType });
-    // Handle login logic here - connect to your backend API
-  };
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      console.log('🟣 Attempting login for', userType);
+
+      // Step 1: Authenticate the user
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password
+      });
+
+      if (signInError) throw signInError;
+
+      console.log('✅ Authenticated user:', signInData.user);
+
+      // Step 2: Ensure session is active
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) throw new Error('No active session found.');
+
+      const userId = sessionData.session.user.id;
+
+      // Step 3: Fetch profile to determine user type
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profileError) throw profileError;
+
+      console.log('✅ Profile fetched:', profileData);
+
+      // Step 4: Route user based on stored user type
+      const profileType = profileData.user_type;
+      if (profileType === 'patient') {
+        console.log('🩺 Redirecting to patient dashboard...');
+        navigate('/upload');
+      } else if (profileType === 'radiologist') {
+        console.log('🧠 Redirecting to radiologist dashboard...');
+        navigate('/radiologist-dashboard');
+      } else {
+        throw new Error('Unknown user type.');
+      }
+
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      alert(`Login failed: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -79,9 +130,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Email Address
-              </label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -98,9 +147,7 @@ export default function Login() {
 
             {/* Password Field */}
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Password
-              </label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Password</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -134,23 +181,26 @@ export default function Login() {
             </div>
 
             {/* Submit Button */}
-            <Link to="/upload">
             <button
               type="submit"
-              className="w-full py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-purple-500 transition-all duration-300 transform hover:scale-105"
+              disabled={loading}
+              className={`w-full py-4 font-bold rounded-xl transition-all duration-300 transform ${
+                loading
+                  ? 'bg-gray-400 text-white cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-2xl hover:shadow-purple-500 hover:scale-105'
+              }`}
             >
-              Sign In as {userType === 'patient' ? 'Patient' : 'Radiologist'}
+              {loading ? 'Signing In...' : `Sign In as ${userType === 'patient' ? 'Patient' : 'Radiologist'}`}
             </button>
-            </Link>
           </form>
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
             <p className="text-gray-600">
               Don't have an account?{' '}
-              <a href="/signup" className="font-bold text-purple-600 hover:text-purple-700">
+              <Link to="/signup" className="font-bold text-purple-600 hover:text-purple-700">
                 Sign Up
-              </a>
+              </Link>
             </p>
           </div>
         </div>
