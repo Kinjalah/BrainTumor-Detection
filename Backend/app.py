@@ -15,6 +15,11 @@ import cv2
 import numpy as np
 from PIL import Image
 import traceback
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 # === Local modules ===
 from modules.input_loader import load_mri
@@ -42,8 +47,12 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # === Supabase configuration ===
-SUPABASE_URL = "https://erulrnewiipphtfytlnp.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVydWxybmV3aWlwcGh0Znl0bG5wIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTM2NjcxMywiZXhwIjoyMDc2OTQyNzEzfQ.vTPMAZOFpODl0K3pWz7vvCJAVxdgtiP2UpZMqyxo6Ek"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("❌ Missing SUPABASE_URL or SUPABASE_KEY in environment variables.")
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # === Helper: Generate text summary ===
