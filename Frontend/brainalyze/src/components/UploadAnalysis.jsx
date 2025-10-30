@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import {
   Brain, Upload, User, Calendar, Ruler, Weight, Droplet,
-  MapPin, Phone, Mail, LogOut, Menu, X, Loader2
+  MapPin, Phone, Mail, LogOut, Menu, X, Loader2 ,CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,6 +16,8 @@ export default function UploadAnalysis() {
   const [dragActive, setDragActive] = useState(false);
   const [patientData, setPatientData] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [analysisResults, setAnalysisResults] = useState(null);
+
 
   // ✅ Fetch logged-in user profile + patient info
   useEffect(() => {
@@ -94,14 +96,73 @@ const handleFileChange = (e) => {
   }
 };
 
-  const handleFileUpload = (file) => {
-    setUploadedFile(file);
-    setIsAnalyzing(true);
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      setAnalysisComplete(true);
-    }, 3000);
-  };
+  const handleFileUpload = async (file) => {
+  setUploadedFile(file);
+  setIsAnalyzing(true);
+
+  try {
+    if (!patientData?.id) {
+      alert("Patient information not found. Please log in again.");
+      return;
+    }
+
+    // ✅ Prepare data to send to FastAPI backend
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("patient_id", patientData.id); // Send actual UUID from Supabase
+    formData.append("patient_name", profile.full_name);
+
+    // ✅ Call FastAPI backend
+    const response = await fetch("http://127.0.0.1:8000/analyze", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error(`Backend error: ${response.statusText}`);
+
+    const result = await response.json();
+    console.log("✅ Analysis result from backend:", result);
+
+    // ✅ Save analysis metadata to Supabase
+    const { data: analysisInsert, error: analysisError } = await supabase
+      .from("analysis_results")
+      .insert([
+        {
+          scan_id: result.scan_id || null,
+          tumor_detected: result.tumor_detected,
+          confidence: result.confidence,
+          tumor_type: result.tumor_type,
+          tumor_size: result.tumor_size,
+          tumor_location: result.tumor_location,
+          tumor_volume: result.tumor_volume,
+          severity: result.severity,
+          description: result.description,
+          recommendations: result.recommendations
+            ? JSON.stringify(result.recommendations)
+            : null,
+          ai_model: result.ai_model || "DenseNet-121",
+          processing_time: result.processing_time,
+          slices_analyzed: result.slices_analyzed,
+        },
+      ])
+      .select();
+
+    if (analysisError) console.error("⚠️ Supabase insert error:", analysisError);
+
+    // ✅ Store backend result for frontend display
+    setAnalysisResults(result);
+    setAnalysisComplete(true);
+
+    // ✅ Navigate to report page (only after everything completes)
+    navigate("/report");
+  } catch (error) {
+    console.error("❌ Error during analysis:", error);
+    alert("Error analyzing MRI scan. Please try again.");
+  } finally {
+    setIsAnalyzing(false);
+  }
+};
+
 
   if (!profile) {
     return (
@@ -318,7 +379,7 @@ const handleFileChange = (e) => {
               <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 p-8">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl">
-                    <Activity className="w-6 h-6 text-white" />
+                    {/* <Activity className="w-6 h-6 text-white" /> */}
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-800">Analysis Results</h2>
