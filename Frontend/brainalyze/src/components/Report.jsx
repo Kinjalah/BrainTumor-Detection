@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Brain,
   Download,
@@ -150,19 +149,40 @@ export default function Report() {
     return "Try asking about tumor type, confidence, or treatment.";
   };
 
-  // 🧾 Generate PDF (UNCHANGED)
+  // 🧾 Generate PDF with image support
   const handleDownloadPDF = async () => {
     const reportElement = reportRef.current;
     if (!reportElement) return;
 
-    const canvas = await html2canvas(reportElement, { scale: 2 });
+    const canvas = await html2canvas(reportElement, { 
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    });
     const imgData = canvas.toDataURL("image/png");
 
     const pdf = new jsPDF("p", "mm", "a4");
     const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
     const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgHeight);
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    // Add first page
+    pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+    heightLeft -= pdfHeight;
+
+    // Add additional pages if content is longer than one page
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+
     pdf.save(
       `Brainalyze_Report_${new Date().toISOString().split("T")[0]}.pdf`
     );
@@ -357,38 +377,51 @@ export default function Report() {
           </div>
 
           {/* Right Column - Main Report Content */}
-          <div
-            ref={reportRef}
-            className="lg:col-span-2 space-y-6 animate-fade-in-right"
-          >
-            {/* Report Header */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+          <div className="lg:col-span-2 space-y-6 animate-fade-in-right">
+            {/* PDF-Friendly Report Section */}
+            <div ref={reportRef} className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
               <div className="text-center mb-6">
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+                <h2 className="text-3xl font-bold text-purple-700 mb-2">
                   Brainalyze MRI Report
                 </h2>
-                <p className="text-gray-500">Medical Analysis Report</p>
+                <p className="text-gray-600 text-base">Medical Analysis Report</p>
+              </div>
+
+              {/* Report Details */}
+              <div className="space-y-4 mb-6">
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-gray-900 font-semibold mb-1">Tumor Type:</p>
+                  <p className="text-gray-700">{reportData.tumor_type || "Unknown"}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-gray-900 font-semibold mb-1">Confidence:</p>
+                  <p className="text-gray-700">{confidencePercentage}%</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-gray-900 font-semibold mb-1">Severity:</p>
+                  <p className="text-gray-700">{reportData.severity || "N/A"}</p>
+                </div>
               </div>
 
               {/* Clinical Description */}
-              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-purple-100">
+              <div className="bg-blue-50 rounded-lg p-6 mb-6 border border-blue-200">
                 <div className="flex items-center space-x-2 mb-3">
-                  <FileText className="w-5 h-5 text-purple-600" />
-                  <h3 className="font-semibold text-gray-900 text-lg">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-bold text-gray-900 text-lg">
                     Clinical Description
                   </h3>
                 </div>
-                <p className="text-gray-700 leading-relaxed">
+                <p className="text-gray-800 leading-relaxed">
                   {reportData.description || "N/A"}
                 </p>
               </div>
 
               {/* Recommendations */}
               {Array.isArray(reportData.recommendations) && (
-                <div>
+                <div className="mb-6">
                   <div className="flex items-center space-x-2 mb-4">
                     <Sparkles className="w-5 h-5 text-purple-600" />
-                    <h3 className="font-semibold text-xl text-gray-900">
+                    <h3 className="font-bold text-xl text-gray-900">
                       Medical Recommendations
                     </h3>
                   </div>
@@ -396,12 +429,12 @@ export default function Report() {
                     {reportData.recommendations.map((rec, i) => (
                       <div
                         key={i}
-                        className="flex items-start space-x-3 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-200 hover:shadow-md transition-shadow duration-300"
+                        className="flex items-start space-x-3 p-4 bg-purple-50 rounded-lg border border-purple-200"
                       >
-                        <div className="w-7 h-7 bg-gradient-to-br from-purple-600 to-pink-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                        <div className="w-7 h-7 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
                           {i + 1}
                         </div>
-                        <p className="text-gray-700 leading-relaxed pt-1">
+                        <p className="text-gray-800 leading-relaxed pt-1">
                           {rec}
                         </p>
                       </div>
@@ -409,32 +442,29 @@ export default function Report() {
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* AI Visualization */}
-            {reportData.gradcam_url && (
-              <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 hover:shadow-2xl transition-all duration-300">
-                <div className="flex items-center space-x-2 mb-4">
-                  <TrendingUp className="w-5 h-5 text-purple-600" />
-                  <h3 className="text-xl font-semibold text-gray-900">
-                    AI Visualization (Grad-CAM)
-                  </h3>
-                </div>
-                <div className="relative rounded-xl overflow-hidden border-2 border-gray-200 group">
-                  <img
-                    src={reportData.gradcam_url}
-                    alt="Grad-CAM"
-                    className="w-full h-auto transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                    <p className="text-white text-sm leading-relaxed">
-                      Heatmap highlights tumor-affected regions detected by the
-                      AI model
-                    </p>
+              {/* AI Visualization */}
+              {reportData.gradcam_url && (
+                <div>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <TrendingUp className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-xl font-bold text-gray-900">
+                      AI Visualization (Grad-CAM)
+                    </h3>
                   </div>
+                  <div className="rounded-lg overflow-hidden border-2 border-gray-300">
+                    <img
+                      src={reportData.gradcam_url}
+                      alt="Grad-CAM"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-gray-700 text-sm mt-3 text-center">
+                    Heatmap highlights tumor-affected regions detected by the AI model
+                  </p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
