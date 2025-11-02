@@ -232,8 +232,9 @@ export default function Report() {
     : "N/A";
 
   const confidencePercentage = reportData.confidence
-    ? (reportData.confidence * 100).toFixed(2)
-    : "N/A";
+  ? reportData.confidence.toFixed(2)
+  : "N/A";
+
 
   const confidenceColor =
     reportData.confidence >= 0.9
