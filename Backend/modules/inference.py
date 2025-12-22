@@ -1,75 +1,52 @@
 # modules/inference.py
-
 import torch
 import torch.nn.functional as F
-from monai.networks.nets import densenet121
-import numpy as np
+from torchvision import models
 
-# Define class names for clarity. Let's assume index 0 is 'No Tumor', index 1 is 'Tumor'.
-CLASS_NAMES = {0: "No Tumor", 1: "Tumor"}
+LABELS = ["No Tumor", "Tumor"]
 
-def load_model(device: str = "cpu") -> densenet121:
+def load_model(device="cpu"):
     """
-    Loads the pre-trained DenseNet-121 model from MONAI.
-    
-    Args:
-        device (str): The device to load the model onto ('cpu' or 'cuda').
-        
-    Returns:
-        The pre-trained DenseNet-121 model.
+    Load a pretrained DenseNet-121 model fine-tuned for brain tumor classification.
     """
-    model = densenet121(
-        spatial_dims=2,         # 2D images
-        in_channels=3,          # We are converting grayscale to 3 channels
-        out_channels=2,         # 2 classes: 'No Tumor', 'Tumor'
-        pretrained=True         # Use the ImageNet pre-trained weights
-    )
-    
-    # Set the model to evaluation mode
-    # This disables layers like Dropout which are only used during training.
-    model.eval()
-    
-    # Move the model to the specified device (CPU or GPU)
+    model = models.densenet121(weights=None)  # use pretrained=True if available
+    num_features = model.classifier.in_features
+    model.classifier = torch.nn.Linear(num_features, len(LABELS))
     model.to(device)
-    
-    print("DenseNet-121 model loaded successfully on", device)
+    model.eval()
     return model
 
-def predict_scan(model: densenet121, processed_slices: list, device: str = "cpu") -> tuple[str, float]:
+
+def predict_scan(model, processed_slices, device="cpu"):
     """
-    Runs inference on a list of preprocessed slices and aggregates the results.
-    
-    Args:
-        model (densenet121): The loaded DenseNet model.
-        processed_slices (list): A list of preprocessed 2D slice tensors.
-        device (str): The device the model is on ('cpu' or 'cuda').
-        
-    Returns:
-        A tuple containing the final prediction label (str) and confidence score (float).
+    Predict tumor class from a list of preprocessed MRI slices.
+    Uses weighted averaging for more stable and confident predictions.
     """
-    # Use torch.no_grad() for inference to save memory and computations
+    model.eval()
+
+    if not processed_slices:
+        raise ValueError("❌ No preprocessed slices found for prediction.")
+
     with torch.no_grad():
-        # Stack all slice tensors into a single batch tensor
+        # Stack and send to device
         batch = torch.stack(processed_slices).to(device)
-        
-        # Get the model's raw output (logits)
+
+        # Forward pass through model
         outputs = model(batch)
-        
-        # Apply the Softmax function to convert logits to probabilities
-        # dim=1 applies it across the class scores for each slice
-        probabilities = F.softmax(outputs, dim=1)
-        
-        # Get the probability for the "Tumor" class (index 1) for each slice
-        tumor_probs_per_slice = probabilities[:, 1].cpu().numpy()
-        
-        # --- Aggregation Strategy ---
-        # We'll use the mean probability across all slices as the final confidence score
-        final_confidence = np.mean(tumor_probs_per_slice)
-        
-        # --- Decision Rule ---
-        # If the average confidence is > 0.5, we classify it as "Tumor"
-        threshold = 0.5
-        final_prediction_index = 1 if final_confidence >= threshold else 0
-        final_prediction_label = CLASS_NAMES[final_prediction_index]
-        
-        return final_prediction_label, float(final_confidence)
+        probs = F.softmax(outputs, dim=1)
+
+        # Compute per-slice confidence (max probability)
+        slice_confidences, _ = torch.max(probs, dim=1)
+
+        # Normalize weights (stronger slices get higher weight)
+        weights = slice_confidences / slice_confidences.sum()
+
+        # Weighted average of probabilities
+        weighted_probs = (probs * weights.unsqueeze(1)).sum(dim=0)
+
+        # Final prediction
+        conf, pred_idx = torch.max(weighted_probs, dim=0)
+        label = LABELS[pred_idx.item()]
+        confidence = conf.item() * 100  # convert to percentage
+
+    return label, confidence

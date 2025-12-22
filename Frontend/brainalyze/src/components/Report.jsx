@@ -1,471 +1,569 @@
-import React, { useState } from 'react';
-import { Brain, Download, MessageCircle, X, Send, User, Calendar, FileText, Activity, AlertCircle, TrendingUp, MapPin, Printer, Share2, ChevronDown, ChevronUp, Bot } from 'lucide-react';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Brain,
+  Download,
+  MessageCircle,
+  X,
+  Send,
+  Bot,
+  AlertCircle,
+  Activity,
+  FileText,
+  CheckCircle,
+  Clock,
+  Sparkles,
+  TrendingUp,
+  Shield,
+} from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 export default function Report() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([
-    { type: 'bot', message: 'Hello! I\'m your medical AI assistant. How can I help you understand your report?' }
+    {
+      type: "bot",
+      message:
+        "Hello! I'm your medical AI assistant. How can I help you understand your report?",
+    },
   ]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [expandedSections, setExpandedSections] = useState({
-    overview: true,
-    findings: true,
-    recommendations: true,
-    technical: false
-  });
+  const [inputMessage, setInputMessage] = useState("");
+  const [reportData, setReportData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
+  const reportRef = useRef();
+  const chatEndRef = useRef();
 
-  // Sample report data
-  const reportData = {
-    patientInfo: {
-      name: 'John Anderson',
-      patientId: 'PAT-2024-001',
-      age: 39,
-      gender: 'Male',
-      scanDate: 'January 15, 2025',
-      reportDate: 'January 15, 2025',
-      referringPhysician: 'Dr. Sarah Mitchell'
-    },
-    scanInfo: {
-      modality: 'MRI Brain',
-      sequence: 'T1-weighted, T2-weighted, FLAIR',
-      contrast: 'Gadolinium-based contrast agent',
-      scanner: 'Siemens Magnetom Skyra 3T'
-    },
-    diagnosis: {
-      primary: 'Glioblastoma (Grade IV)',
-      confidence: 94.5,
-      severity: 'High',
-      status: 'Newly Diagnosed'
-    },
-    tumorCharacteristics: {
-      location: 'Right Frontal Lobe',
-      size: '3.2 x 2.8 x 2.5 cm',
-      volume: '23.5 cm³',
-      enhancement: 'Heterogeneous ring enhancement',
-      borders: 'Irregular, infiltrative',
-      peritumoral: 'Significant vasogenic edema',
-      massEffect: 'Mild midline shift (3mm to left)'
-    },
-    findings: [
-      'Large heterogeneously enhancing mass in the right frontal lobe',
-      'Central necrosis with irregular thick rim enhancement',
-      'Surrounding FLAIR hyperintensity consistent with vasogenic edema',
-      'Mild mass effect with compression of right lateral ventricle',
-      'No evidence of hemorrhage or calcification',
-      'No significant restricted diffusion within the lesion'
-    ],
-    recommendations: [
-      'Immediate neurosurgical consultation for surgical planning',
-      'Molecular profiling including IDH mutation, MGMT methylation status',
-      'Baseline functional MRI and DTI for surgical planning',
-      'Multidisciplinary tumor board discussion',
-      'Consider enrollment in clinical trials',
-      'Follow-up MRI in 4-6 weeks post-treatment initiation'
-    ],
-    aiAnalysis: {
-      model: 'DenseNet-121 Custom Architecture',
-      accuracy: '94.5%',
-      processingTime: '1.8 seconds',
-      slicesAnalyzed: 156
-    }
-  };
+  // ✅ Fetch latest report and Grad-CAM visualization (UNCHANGED)
+  useEffect(() => {
+    const fetchReport = async () => {
+      try {
+        // ✅ Get the logged-in user
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        if (!user) {
+          setReportData(null);
+          setLoading(false);
+          return;
+        }
 
-  const handleSendMessage = () => {
-    if (inputMessage.trim()) {
-      setChatMessages([...chatMessages, { type: 'user', message: inputMessage }]);
-      setInputMessage('');
-      
-      // Simulate bot response
-      setTimeout(() => {
-        const botResponse = getBotResponse(inputMessage);
-        setChatMessages(prev => [...prev, { type: 'bot', message: botResponse }]);
-      }, 1000);
-    }
+        // ✅ Get patient id linked to user
+        const { data: patientData, error: patientError } = await supabase
+          .from("patients")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (patientError) throw patientError;
+        if (!patientData) {
+          setReportData(null);
+          setLoading(false);
+          return;
+        }
+
+        // ✅ Get the latest report
+        const { data: reportList, error: reportError } = await supabase
+          .from("reports")
+          .select("*")
+          .eq("patient_id", patientData.id)
+          .order("generated_at", { ascending: false })
+          .limit(1);
+        if (reportError) throw reportError;
+        if (!reportList || reportList.length === 0) {
+          setReportData(null);
+          setLoading(false);
+          return;
+        }
+
+        const latestReport = reportList[0];
+        console.log("🧾 Latest report:", latestReport);
+
+        // ✅ Fetch matching analysis result
+        const { data: analysisData, error: analysisError } = await supabase
+          .from("analysis_results")
+          .select("*")
+          .eq("id", latestReport.analysis_id)
+          .maybeSingle();
+        if (analysisError) throw analysisError;
+
+        console.log("🔍 Matched analysis data:", analysisData);
+        const { data: allAnalyses } = await supabase
+          .from("analysis_results")
+          .select("id");
+        console.log("📋 All analysis IDs:", allAnalyses);
+
+        // ✅ Merge both
+        const merged = { ...latestReport, ...analysisData };
+        setReportData(merged);
+      } catch (err) {
+        console.error("❌ Error fetching report:", err);
+        setReportData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReport();
+  }, []);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  // 💬 Handle chatbot (UNCHANGED)
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim()) return;
+    const userMsg = inputMessage;
+    setChatMessages([...chatMessages, { type: "user", message: userMsg }]);
+    setInputMessage("");
+    setIsTyping(true);
+
+    setTimeout(() => {
+      const botResponse = getBotResponse(userMsg);
+      setChatMessages((prev) => [
+        ...prev,
+        { type: "bot", message: botResponse },
+      ]);
+      setIsTyping(false);
+    }, 800);
   };
 
   const getBotResponse = (message) => {
-    const lowerMessage = message.toLowerCase();
-    if (lowerMessage.includes('tumor') || lowerMessage.includes('glioblastoma')) {
-      return 'Glioblastoma is a grade IV brain tumor. The report shows a 3.2cm tumor in the right frontal lobe with 94.5% confidence. Would you like to know more about treatment options?';
-    } else if (lowerMessage.includes('treatment') || lowerMessage.includes('therapy')) {
-      return 'Treatment typically involves surgery, radiation therapy, and chemotherapy. Your report recommends immediate neurosurgical consultation. I can explain each treatment modality if you\'d like.';
-    } else if (lowerMessage.includes('prognosis') || lowerMessage.includes('survival')) {
-      return 'I understand this is concerning. Prognosis varies based on many factors including molecular profile, age, and response to treatment. Please discuss this with your oncologist for personalized information.';
-    } else if (lowerMessage.includes('size')) {
-      return 'The tumor measures 3.2 x 2.8 x 2.5 cm with a volume of 23.5 cm³. This is considered a moderate-sized lesion. Early detection and treatment are important.';
-    }
-    return 'I can help explain any part of your report. Try asking about the tumor, treatment options, or specific medical terms you\'d like clarified.';
+    const lower = message.toLowerCase();
+    if (lower.includes("tumor"))
+      return `The AI detected a ${
+        reportData?.tumor_type || "tumor"
+      }. Please consult your neurologist.`;
+    if (lower.includes("confidence"))
+      return `The model's confidence is ${
+        reportData?.confidence
+          ? (reportData.confidence * 100).toFixed(2)
+          : "N/A"
+      }%.`;
+    if (lower.includes("treatment"))
+      return "Treatment depends on tumor type and severity — consult your specialist.";
+    return "Try asking about tumor type, confidence, or treatment.";
   };
 
-  const toggleSection = (section) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
+  // 🧾 Generate PDF with image support
+  const handleDownloadPDF = async () => {
+    const reportElement = reportRef.current;
+    if (!reportElement) return;
+
+    const canvas = await html2canvas(reportElement, { 
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    });
+    const imgData = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    // Add first page
+    pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+    heightLeft -= pdfHeight;
+
+    // Add additional pages if content is longer than one page
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+
+    pdf.save(
+      `Brainalyze_Report_${new Date().toISOString().split("T")[0]}.pdf`
+    );
   };
+
+  // 🕓 Enhanced Loading State
+  if (loading)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative w-24 h-24 mx-auto mb-6">
+            <div className="absolute inset-0 border-4 border-purple-200 rounded-full animate-ping opacity-75"></div>
+            <div className="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin"></div>
+            <Brain className="w-12 h-12 text-purple-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          </div>
+          <p className="text-gray-700 text-lg font-semibold animate-pulse">
+            Loading your report...
+          </p>
+          <p className="text-gray-500 text-sm mt-2">
+            Retrieving your medical analysis
+          </p>
+        </div>
+      </div>
+    );
+
+  // Enhanced No Data State
+  if (!reportData)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-md text-center border-2 border-red-100 animate-fade-in">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce-slow">
+            <AlertCircle className="w-10 h-10 text-red-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-3">
+            No Report Found
+          </h3>
+          <p className="text-gray-600 leading-relaxed">
+            We couldn't locate any medical reports for your account. Please
+            upload an MRI scan to generate a report.
+          </p>
+        </div>
+      </div>
+    );
+
+  const formattedDate = reportData.generated_at
+    ? new Date(reportData.generated_at).toLocaleString()
+    : "N/A";
+
+  const confidencePercentage = reportData.confidence
+  ? reportData.confidence.toFixed(2)
+  : "N/A";
+
+
+  const confidenceColor =
+    reportData.confidence >= 0.9
+      ? "text-green-600"
+      : reportData.confidence >= 0.7
+      ? "text-yellow-600"
+      : "text-red-600";
+  const confidenceBg =
+    reportData.confidence >= 0.9
+      ? "bg-green-50"
+      : reportData.confidence >= 0.7
+      ? "bg-yellow-50"
+      : "bg-red-50";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 pb-20">
-      {/* Header */}
-      <header className="bg-white bg-opacity-90 backdrop-blur-xl border-b-2 border-purple-200 sticky top-0 z-40 shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-2 rounded-xl shadow-lg">
-                <Brain className="w-8 h-8 text-white" />
+      {/* Enhanced Animated Header */}
+      <header className="bg-white bg-opacity-95 backdrop-blur-xl border-b border-gray-200 sticky top-0 z-40 shadow-lg animate-slide-down">
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-xl blur-md opacity-75 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 p-3 rounded-xl shadow-lg transform group-hover:scale-110 transition-transform duration-300">
+                  <Brain className="w-7 h-7 text-white" />
+                </div>
               </div>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                   Brainalyze
                 </h1>
-                <p className="text-xs text-gray-500">Medical Report Portal</p>
+                <p className="text-xs text-gray-500">
+                  AI-Powered Medical Reports
+                </p>
               </div>
             </div>
-            
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-3">
-              <button className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-all font-semibold transform hover:scale-105">
-                <Printer className="w-4 h-4" />
-                <span>Print</span>
-              </button>
-              <button className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-xl hover:bg-purple-200 transition-all font-semibold transform hover:scale-105">
-                <Share2 className="w-4 h-4" />
-                <span>Share</span>
-              </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl hover:shadow-xl transition-all font-semibold transform hover:scale-105">
-                <Download className="w-4 h-4" />
-                <span>Download PDF</span>
-              </button>
-            </div>
+
+            <button
+              onClick={handleDownloadPDF}
+              className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 font-semibold transform hover:scale-105 active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download PDF</span>
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Report Header Card */}
-        <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-purple-200 p-8 mb-6 animate-fade-in">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h2 className="text-3xl font-extrabold text-gray-800 mb-2">
-                Brain MRI Analysis Report
-              </h2>
-              <p className="text-gray-500">AI-Powered Diagnostic Analysis</p>
-            </div>
-            <div className="text-right">
-              <div className="inline-block px-4 py-2 bg-gradient-to-r from-red-100 to-pink-100 border-2 border-red-300 rounded-xl">
-                <p className="text-xs text-red-600 font-semibold">PRIORITY</p>
-                <p className="text-sm font-bold text-red-700">High Severity</p>
+      {/* Status Banner - Animated */}
+      <div className="max-w-7xl mx-auto px-6 mt-8 animate-fade-in-up">
+        <div className="bg-white rounded-2xl shadow-xl p-6 border-l-4 border-green-500">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center animate-pulse-slow">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-lg">
+                  Report Generated Successfully
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Your MRI analysis is complete and ready for review
+                </p>
               </div>
             </div>
-          </div>
-
-          {/* Patient & Scan Info Grid */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Patient Information */}
-            <div className="p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-200">
-              <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                <User className="w-5 h-5 mr-2 text-blue-600" />
-                Patient Information
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Name:</span>
-                  <span className="font-semibold text-gray-800">{reportData.patientInfo.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Patient ID:</span>
-                  <span className="font-semibold text-gray-800">{reportData.patientInfo.patientId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Age / Gender:</span>
-                  <span className="font-semibold text-gray-800">{reportData.patientInfo.age} / {reportData.patientInfo.gender}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Scan Date:</span>
-                  <span className="font-semibold text-gray-800">{reportData.patientInfo.scanDate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Report Date:</span>
-                  <span className="font-semibold text-gray-800">{reportData.patientInfo.reportDate}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Scan Information */}
-            <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border-2 border-purple-200">
-              <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                <Activity className="w-5 h-5 mr-2 text-purple-600" />
-                Scan Information
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Modality:</span>
-                  <span className="font-semibold text-gray-800">{reportData.scanInfo.modality}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Sequence:</span>
-                  <span className="font-semibold text-gray-800 text-right">T1, T2, FLAIR</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Contrast:</span>
-                  <span className="font-semibold text-gray-800 text-right">Gadolinium</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Scanner:</span>
-                  <span className="font-semibold text-gray-800 text-right">Siemens 3T</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Diagnosis Summary - Prominent Card */}
-        <div className="bg-gradient-to-br from-red-50 via-pink-50 to-purple-50 border-3 border-red-300 rounded-3xl shadow-2xl p-8 mb-6 animate-fade-in">
-          <div className="flex items-start space-x-4">
-            <div className="p-4 bg-red-500 rounded-2xl">
-              <AlertCircle className="w-8 h-8 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-2xl font-extrabold text-gray-800 mb-2">Primary Diagnosis</h3>
-              <p className="text-3xl font-black bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent mb-3">
-                {reportData.diagnosis.primary}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <div className="px-4 py-2 bg-white rounded-xl shadow-md">
-                  <span className="text-xs text-gray-500">AI Confidence</span>
-                  <p className="text-lg font-bold text-purple-600">{reportData.diagnosis.confidence}%</p>
-                </div>
-                <div className="px-4 py-2 bg-white rounded-xl shadow-md">
-                  <span className="text-xs text-gray-500">Severity</span>
-                  <p className="text-lg font-bold text-red-600">{reportData.diagnosis.severity}</p>
-                </div>
-                <div className="px-4 py-2 bg-white rounded-xl shadow-md">
-                  <span className="text-xs text-gray-500">Status</span>
-                  <p className="text-lg font-bold text-gray-800">{reportData.diagnosis.status}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Collapsible Sections */}
-        <div className="space-y-4">
-          {/* Tumor Characteristics */}
-          <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 overflow-hidden animate-fade-in">
-            <button
-              onClick={() => toggleSection('overview')}
-              className="w-full p-6 flex items-center justify-between hover:bg-purple-50 transition-colors"
-            >
-              <div className="flex items-center space-x-3">
-                <MapPin className="w-6 h-6 text-purple-600" />
-                <h3 className="text-xl font-bold text-gray-800">Tumor Characteristics</h3>
-              </div>
-              {expandedSections.overview ? <ChevronUp className="w-6 h-6 text-gray-400" /> : <ChevronDown className="w-6 h-6 text-gray-400" />}
-            </button>
-            {expandedSections.overview && (
-              <div className="p-6 pt-0 grid md:grid-cols-2 gap-4 animate-fade-in">
-                <div className="p-4 bg-blue-50 rounded-xl">
-                  <p className="text-xs text-gray-600 font-semibold mb-1">Location</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.tumorCharacteristics.location}</p>
-                </div>
-                <div className="p-4 bg-purple-50 rounded-xl">
-                  <p className="text-xs text-gray-600 font-semibold mb-1">Size (LxWxH)</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.tumorCharacteristics.size}</p>
-                </div>
-                <div className="p-4 bg-pink-50 rounded-xl">
-                  <p className="text-xs text-gray-600 font-semibold mb-1">Volume</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.tumorCharacteristics.volume}</p>
-                </div>
-                <div className="p-4 bg-blue-50 rounded-xl">
-                  <p className="text-xs text-gray-600 font-semibold mb-1">Enhancement Pattern</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.tumorCharacteristics.enhancement}</p>
-                </div>
-                <div className="p-4 bg-purple-50 rounded-xl">
-                  <p className="text-xs text-gray-600 font-semibold mb-1">Border Characteristics</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.tumorCharacteristics.borders}</p>
-                </div>
-                <div className="p-4 bg-pink-50 rounded-xl">
-                  <p className="text-xs text-gray-600 font-semibold mb-1">Peritumoral Changes</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.tumorCharacteristics.peritumoral}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Detailed Findings */}
-          <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 overflow-hidden animate-fade-in">
-            <button
-              onClick={() => toggleSection('findings')}
-              className="w-full p-6 flex items-center justify-between hover:bg-purple-50 transition-colors"
-            >
-              <div className="flex items-center space-x-3">
-                <FileText className="w-6 h-6 text-blue-600" />
-                <h3 className="text-xl font-bold text-gray-800">Detailed Findings</h3>
-              </div>
-              {expandedSections.findings ? <ChevronUp className="w-6 h-6 text-gray-400" /> : <ChevronDown className="w-6 h-6 text-gray-400" />}
-            </button>
-            {expandedSections.findings && (
-              <div className="p-6 pt-0 animate-fade-in">
-                <ul className="space-y-3">
-                  {reportData.findings.map((finding, index) => (
-                    <li key={index} className="flex items-start space-x-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                      <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm mt-0.5">
-                        {index + 1}
-                      </div>
-                      <p className="text-gray-700 leading-relaxed">{finding}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* Recommendations */}
-          <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 overflow-hidden animate-fade-in">
-            <button
-              onClick={() => toggleSection('recommendations')}
-              className="w-full p-6 flex items-center justify-between hover:bg-purple-50 transition-colors"
-            >
-              <div className="flex items-center space-x-3">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-                <h3 className="text-xl font-bold text-gray-800">Clinical Recommendations</h3>
-              </div>
-              {expandedSections.recommendations ? <ChevronUp className="w-6 h-6 text-gray-400" /> : <ChevronDown className="w-6 h-6 text-gray-400" />}
-            </button>
-            {expandedSections.recommendations && (
-              <div className="p-6 pt-0 animate-fade-in">
-                <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6">
-                  <ul className="space-y-3">
-                    {reportData.recommendations.map((rec, index) => (
-                      <li key={index} className="flex items-start space-x-3">
-                        <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                          </svg>
-                        </div>
-                        <p className="text-gray-700 leading-relaxed font-medium">{rec}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* AI Analysis Details */}
-          <div className="bg-white bg-opacity-90 backdrop-blur-xl rounded-3xl shadow-xl border-2 border-purple-200 overflow-hidden animate-fade-in">
-            <button
-              onClick={() => toggleSection('technical')}
-              className="w-full p-6 flex items-center justify-between hover:bg-purple-50 transition-colors"
-            >
-              <div className="flex items-center space-x-3">
-                <Brain className="w-6 h-6 text-purple-600" />
-                <h3 className="text-xl font-bold text-gray-800">AI Analysis Technical Details</h3>
-              </div>
-              {expandedSections.technical ? <ChevronUp className="w-6 h-6 text-gray-400" /> : <ChevronDown className="w-6 h-6 text-gray-400" />}
-            </button>
-            {expandedSections.technical && (
-              <div className="p-6 pt-0 grid md:grid-cols-4 gap-4 animate-fade-in">
-                <div className="p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl text-center border-2 border-purple-200">
-                  <Brain className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                  <p className="text-xs text-gray-600 mb-1">AI Model</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.aiAnalysis.model}</p>
-                </div>
-                <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl text-center border-2 border-blue-200">
-                  <TrendingUp className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                  <p className="text-xs text-gray-600 mb-1">Accuracy</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.aiAnalysis.accuracy}</p>
-                </div>
-                <div className="p-4 bg-gradient-to-br from-pink-50 to-purple-50 rounded-xl text-center border-2 border-pink-200">
-                  <Activity className="w-8 h-8 text-pink-600 mx-auto mb-2" />
-                  <p className="text-xs text-gray-600 mb-1">Processing Time</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.aiAnalysis.processingTime}</p>
-                </div>
-                <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl text-center border-2 border-purple-200">
-                  <FileText className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                  <p className="text-xs text-gray-600 mb-1">Slices Analyzed</p>
-                  <p className="text-sm font-bold text-gray-800">{reportData.aiAnalysis.slicesAnalyzed}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Disclaimer */}
-        <div className="mt-8 p-6 bg-yellow-50 border-2 border-yellow-300 rounded-2xl animate-fade-in">
-          <div className="flex items-start space-x-3">
-            <AlertCircle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-bold text-yellow-800 mb-2">Important Disclaimer</h4>
-              <p className="text-sm text-yellow-700 leading-relaxed">
-                This report is generated by AI-powered analysis and should be used as a supplementary tool. 
-                Final diagnosis and treatment decisions must be made by qualified healthcare professionals based on 
-                comprehensive clinical evaluation. Please consult with your physician for medical advice.
-              </p>
+            <div className="flex items-center space-x-2 text-gray-600 bg-gray-50 px-4 py-2 rounded-lg">
+              <Clock className="w-4 h-4" />
+              <span className="text-sm font-medium">{formattedDate}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Chatbot Button */}
+      {/* Enhanced Report with Grid Layout */}
+      <div className="max-w-7xl mx-auto px-6 mt-8">
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left Column - Confidence Score Card */}
+          <div className="lg:col-span-1 animate-fade-in-left">
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 text-lg">
+                  Confidence Score
+                </h3>
+                <Activity className="w-5 h-5 text-purple-600" />
+              </div>
+              <div
+                className={`${confidenceBg} border-2 ${
+                  confidenceColor.includes("green")
+                    ? "border-green-200"
+                    : confidenceColor.includes("yellow")
+                    ? "border-yellow-200"
+                    : "border-red-200"
+                } rounded-xl p-6 mb-4`}
+              >
+                <div className={`text-5xl font-bold ${confidenceColor} mb-2`}>
+                  {confidencePercentage}%
+                </div>
+                <p className="text-sm text-gray-600">Detection Accuracy</p>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-full transition-all duration-1000 ease-out animate-progress"
+                  style={{ width: `${confidencePercentage}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Quick Info Card */}
+            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 mt-6 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center space-x-3 mb-4">
+                <Shield className="w-5 h-5 text-purple-600" />
+                <h3 className="font-semibold text-gray-900 text-lg">
+                  Quick Overview
+                </h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mt-2"></div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      Tumor Type
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {reportData.tumor_type || "Unknown"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mt-2"></div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      Severity Level
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {reportData.severity || "N/A"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Main Report Content */}
+          <div className="lg:col-span-2 space-y-6 animate-fade-in-right">
+            {/* PDF-Friendly Report Section */}
+            <div ref={reportRef} className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+              <div className="text-center mb-6">
+                <h2 className="text-3xl font-bold text-purple-700 mb-2">
+                  Brainalyze MRI Report
+                </h2>
+                <p className="text-gray-600 text-base">Medical Analysis Report</p>
+              </div>
+
+              {/* Report Details */}
+              <div className="space-y-4 mb-6">
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-gray-900 font-semibold mb-1">Tumor Type:</p>
+                  <p className="text-gray-700">{reportData.tumor_type || "Unknown"}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-gray-900 font-semibold mb-1">Confidence:</p>
+                  <p className="text-gray-700">{confidencePercentage}%</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-gray-900 font-semibold mb-1">Severity:</p>
+                  <p className="text-gray-700">{reportData.severity || "N/A"}</p>
+                </div>
+              </div>
+
+              {/* Clinical Description */}
+              <div className="bg-blue-50 rounded-lg p-6 mb-6 border border-blue-200">
+                <div className="flex items-center space-x-2 mb-3">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-bold text-gray-900 text-lg">
+                    Clinical Description
+                  </h3>
+                </div>
+                <p className="text-gray-800 leading-relaxed">
+                  {reportData.description || "N/A"}
+                </p>
+              </div>
+
+              {/* Recommendations */}
+              {Array.isArray(reportData.recommendations) && (
+                <div className="mb-6">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Sparkles className="w-5 h-5 text-purple-600" />
+                    <h3 className="font-bold text-xl text-gray-900">
+                      Medical Recommendations
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    {reportData.recommendations.map((rec, i) => (
+                      <div
+                        key={i}
+                        className="flex items-start space-x-3 p-4 bg-purple-50 rounded-lg border border-purple-200"
+                      >
+                        <div className="w-7 h-7 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          {i + 1}
+                        </div>
+                        <p className="text-gray-800 leading-relaxed pt-1">
+                          {rec}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* AI Visualization */}
+              {reportData.gradcam_url && (
+                <div>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <TrendingUp className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-xl font-bold text-gray-900">
+                      AI Visualization (Grad-CAM)
+                    </h3>
+                  </div>
+                  <div className="rounded-lg overflow-hidden border-2 border-gray-300">
+                    <img
+                      src={reportData.gradcam_url}
+                      alt="Grad-CAM"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-gray-700 text-sm mt-3 text-center">
+                    Heatmap highlights tumor-affected regions detected by the AI model
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Enhanced Floating Chat Button */}
       <button
         onClick={() => setChatOpen(!chatOpen)}
-        className="fixed bottom-6 right-6 p-4 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white rounded-full shadow-2xl hover:shadow-purple-500 transition-all transform hover:scale-110 z-50 animate-bounce"
+        className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white rounded-full shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 transform hover:scale-110 active:scale-95 z-50 flex items-center justify-center group"
       >
-        {chatOpen ? <X className="w-7 h-7" /> : <MessageCircle className="w-7 h-7" />}
+        {chatOpen ? (
+          <X className="w-7 h-7 transition-transform duration-300 group-hover:rotate-90" />
+        ) : (
+          <>
+            <MessageCircle className="w-7 h-7 transition-transform duration-300 group-hover:scale-110" />
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse border-2 border-white"></span>
+          </>
+        )}
       </button>
 
-      {/* Chatbot Window */}
+      {/* Enhanced Chatbot Window */}
       {chatOpen && (
-        <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-3xl shadow-2xl border-2 border-purple-200 flex flex-col z-50 animate-fade-in">
+        <div className="fixed bottom-24 right-6 w-[420px] h-[600px] bg-white rounded-3xl shadow-2xl border-2 border-gray-200 flex flex-col z-50 animate-slide-up overflow-hidden">
           {/* Chat Header */}
-          <div className="p-6 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-t-3xl">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                <Bot className="w-7 h-7 text-purple-600" />
+          <div className="p-6 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 relative overflow-hidden">
+            <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+            <div className="relative flex items-center space-x-4">
+              <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform duration-300">
+                <Bot className="w-8 h-8 text-purple-600" />
               </div>
               <div>
-                <h3 className="font-bold text-white">Medical AI Assistant</h3>
-                <p className="text-xs text-purple-100">Ask me about your report</p>
+                <h3 className="font-bold text-white text-lg">
+                  Medical AI Assistant
+                </h3>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <p className="text-xs text-purple-100">
+                    Online • Ready to help
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-            {chatMessages.map((msg, index) => (
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
+            {chatMessages.map((msg, i) => (
               <div
-                key={index}
-                className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                key={i}
+                className={`flex ${
+                  msg.type === "user" ? "justify-end" : "justify-start"
+                } animate-message-in`}
               >
                 <div
-                  className={`max-w-[80%] p-3 rounded-2xl ${
-                    msg.type === 'user'
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                      : 'bg-white border-2 border-purple-200 text-gray-800'
+                  className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+                    msg.type === "user"
+                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-br-sm"
+                      : "bg-white border-2 border-purple-200 text-gray-800 rounded-bl-sm"
                   }`}
                 >
-                  <p className="text-sm">{msg.message}</p>
+                  <p className="text-sm leading-relaxed">{msg.message}</p>
                 </div>
               </div>
             ))}
+            {isTyping && (
+              <div className="flex justify-start animate-message-in">
+                <div className="bg-white border-2 border-purple-200 p-4 rounded-2xl rounded-bl-sm shadow-sm">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                    <div
+                      className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.2s" }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.4s" }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
           </div>
 
           {/* Chat Input */}
-          <div className="p-4 border-t-2 border-purple-200 bg-white rounded-b-3xl">
-            <div className="flex items-center space-x-2">
+          <div className="p-4 border-t-2 border-gray-200 bg-white rounded-b-3xl">
+            <div className="flex items-end space-x-3">
               <input
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 placeholder="Ask about your report..."
-                className="flex-1 px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:outline-none text-sm"
+                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-sm transition-colors duration-300"
               />
               <button
                 onClick={handleSendMessage}
-                className="p-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105"
+                disabled={!inputMessage.trim()}
+                className="p-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -473,6 +571,150 @@ export default function Report() {
           </div>
         </div>
       )}
+
+      {/* CSS Animations */}
+      <style jsx>{`
+        @keyframes slide-down {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes fade-in-left {
+          from {
+            opacity: 0;
+            transform: translateX(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes fade-in-right {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slide-up {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes message-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes pulse-slow {
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.6;
+          }
+        }
+
+        @keyframes bounce-slow {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes progress {
+          from {
+            width: 0;
+          }
+        }
+
+        .animate-slide-down {
+          animation: slide-down 0.5s ease-out;
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out;
+        }
+
+        .animate-fade-in-up {
+          animation: fade-in-up 0.6s ease-out;
+        }
+
+        .animate-fade-in-left {
+          animation: fade-in-left 0.6s ease-out;
+        }
+
+        .animate-fade-in-right {
+          animation: fade-in-right 0.6s ease-out;
+        }
+
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
+        }
+
+        .animate-message-in {
+          animation: message-in 0.3s ease-out;
+        }
+
+        .animate-pulse-slow {
+          animation: pulse-slow 2s ease-in-out infinite;
+        }
+
+        .animate-bounce-slow {
+          animation: bounce-slow 2s ease-in-out infinite;
+        }
+
+        .animate-progress {
+          animation: progress 1s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
